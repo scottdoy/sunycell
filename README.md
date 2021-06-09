@@ -39,3 +39,9 @@ It's silly, but it works.
 In order to access files on the SUNYCell DSA, you'll need to create a `.env` file somewhere in your project directory. 
 This is a plaintext file that contains your secrets; in particular, the `*_URL` and `*_KEY` environment variables for different API endpoints.
 Make sure that if you are running the example notebooks locally, they can find these files, and that you do NOT add them to your GitHub account!
+
+## Example Notebooks
+
+We will be expanding this section with demonstration / educational resources for different parts of the SUNYCell ecosystem.
+
+- [Stain Normalization Examples](notebooks/stain_normalization.ipynb)
