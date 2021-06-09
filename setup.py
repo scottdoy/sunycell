@@ -9,6 +9,6 @@ setup(
         'histomicstk',
         'python-dotenv',
         'pooch'
-    ]
+    ],
 )
 
