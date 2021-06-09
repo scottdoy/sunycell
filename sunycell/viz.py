@@ -27,7 +27,7 @@ def plot_image_stack(image_stack, ncols=3, figsize=(20,10), titles=None):
     nrows = nrows + 1 if d % ncols > 0 else nrows
 
     # Create a basic plot
-    f, ax = plt.subplots(nrows, ncols, figsize=(20,10))
+    f, ax = plt.subplots(nrows, ncols, figsize=figsize)
 
     # Switch based on nrows, since nrows=1 gives a single axis list
     if nrows == 1:
