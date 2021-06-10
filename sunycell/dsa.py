@@ -159,34 +159,18 @@ def image_data(conn, sample_id, bounds_dict, appendStr=None):
     if appendStr is not None:
         getStr += appendStr
 
+    # Get the image raw response
     try:
         resp = conn.get(getStr, jsonResp=False)
     except:
+        print(f'Could not retrieve the image response using {getStr}, returning None')
         return None
     
-    #retry_count = 0
-    #while retry_count <= 10:
-        #try:
-            #resp = conn.get(getStr, jsonResp=False)
-            #break
-        #except:
-            #sleep(30)
-            #try:
-                #conn = get_histomics_connection(APIURL, APIKEY)
-            #except:
-                #return None
-
-            #resp = conn.get(getStr, jsonResp=False)
-            #retry_count += 1
-
-    ## If we've exhausted our retries, return nothing
-    #if retry_count >= 10:
-        #return None
-
     # Sometimes this fails, and I'm not sure why
     try:
         img_roi = get_image_from_htk_response(resp)
     except:
+        print(f'Could not convert the image response to image, returning None')
         return None
    
     return img_roi
