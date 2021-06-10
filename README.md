@@ -12,7 +12,7 @@ It is highly recommended to use a virtual environment to install this software.
 To install this package into your current environment, from the repository directory, run:
 
 ```
-pip install -e ./src/.
+pip install -e .
 ```
 
 This will install the `sunycell` package into your current environment. 
