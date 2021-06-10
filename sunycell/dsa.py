@@ -78,6 +78,8 @@ def get_sample_id(conn, sample_name, collection_name, folder_name):
     for (id, item) in zip(id_list, item_list):
         if item == sample_name:
             return id
+    print(f'Did not find sample {sample_name} in {collection_name} / {folder_name}. Please recheck your access and spelling of the path.')
+    return None
 
 def image_metadata(conn, sample_id):
     resp = conn.get(f'/item/{sample_id}/tiles')
