@@ -33,10 +33,11 @@ def plot_image_stack(image_stack, ncols=3, figsize=(20,10), titles=None):
     if nrows == 1:
         for ncol in np.arange(ncols):
             idx = ncol
-            ax[ncol].imshow(image_stack[:,:,:,idx])
-            ax[ncol].axis('off')
-            if titles is not None:
-                ax[ncol].set_title(f'{titles[idx]}')
+            if idx <= (d-1):
+                ax[ncol].imshow(image_stack[:,:,:,idx])
+                ax[ncol].axis('off')
+                if titles is not None:
+                    ax[ncol].set_title(f'{titles[idx]}')
     else:
         for nrow in np.arange(nrows):
             for ncol in np.arange(ncols):
