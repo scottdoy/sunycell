@@ -144,11 +144,17 @@ def slide_annotations(conn, slide_id, cfg, log=None, group_list=None):
 def image_data(conn, sample_id, bounds_dict, appendStr=None):
     """Return a numpy image defined by the connection, sample_id, and ROI."""
 
+    # Convert the keys of the bounds_dict to lowercase
+    bounds_dict = {k.lower():v for k,v in bounds_dict.items()}
+
+    # Ensure the keys are present for the bounding box
+    assert 'xmin' in bounds_dict and 'xmax' in bounds_dict and 'ymin' in bounds_dict and 'ymax' in bounds_dict, f'bounds_dict is not formatted properly, please make sure xmin, xmax, ymin, ymax is included in the keys.'
+
     getStr = f"item/{sample_id}/tiles/region?"+ \
-        f"left={bounds_dict['XMIN']}&"+ \
-        f"right={bounds_dict['XMAX']}&"+ \
-        f"top={bounds_dict['YMIN']}&"+ \
-        f"bottom={bounds_dict['YMAX']}"
+        f"left={bounds_dict['xmin']}&"+ \
+        f"right={bounds_dict['xmax']}&"+ \
+        f"top={bounds_dict['ymin']}&"+ \
+        f"bottom={bounds_dict['ymax']}"
     
     if appendStr is not None:
         getStr += appendStr
