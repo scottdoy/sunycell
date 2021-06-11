@@ -21,6 +21,10 @@ def get_polygon_from_pts(pts):
 def get_edge_coordinates(elements):
     coord = []
     for i,element in enumerate(elements):
+        # If the element is not a polygon, it may not contain "points".
+        # If so, skip it.
+        if 'points' not in element.keys():
+            continue
         points = element['points']
         points = [x[:-1] for x in points]
 
