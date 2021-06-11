@@ -2,7 +2,15 @@
 This package handles things related to tissue stains, like tissue detection and stain normalization.
 """
 import numpy as np
-from skimage import color
+
+from skimage import segmentation, color
+from skimage.morphology import disk, opening, remove_small_objects
+from skimage.measure import label
+
+from scipy import ndimage as ndi
+
+from histomicstk.saliency.tissue_detection import (
+    get_tissue_mask)
 
 def histogram_matching(source_image, target_image, nbins = 255):
     """Perform stain normalization through RGB histogram matching.
@@ -186,4 +194,36 @@ def color_deconvolve(input_image, intensity=255.0, matrix=np.array([[0.644211, 0
     deconvolved_image = np.reshape(c, (input_image.shape[0], input_image.shape[1], 3))
     return deconvolved_image, matrix
 
+def get_tissue_boundaries(tissue_image, tissue_mask_kwargs=None):
+    """Given an RGB image, detect tissue boundaries and return them."""
 
+    if tissue_mask_kwargs is None:
+        tissue_mask_kwargs = {
+            'deconvolve_first': False,
+            'n_thresholding_steps': 1, 
+            'sigma': 0.4,
+            'min_size': 5
+        }
+
+    # Use the HistomicsTK tissue masking function
+    labeled, mask = get_tissue_mask(
+        tissue_image,
+        **tissue_mask_kwargs)
+
+    #Erosion, Opening(instead of erosion)
+    selem = disk(1)
+    mask_proc = opening(mask, selem)
+
+    # Remove small objects in the opened label image
+    mask_proc = remove_small_objects(mask_proc, min_size = 5000)
+    
+    # Fill holes
+    mask_proc = ndi.binary_fill_holes(mask_proc>0)
+
+    # Re-labeled processed image mask
+    labeled_proc = label(mask_proc, background = 0)
+    
+    # Grab the x and y coordinates of the tissue regions
+    img_tissue_boundary = segmentation.find_boundaries(mask_proc)
+    (tissue_y, tissue_x) = np.nonzero(img_tissue_boundary)
+    return tissue_x, tissue_y
