@@ -143,6 +143,40 @@ def slide_annotations(conn, slide_id, cfg, log=None, group_list=None):
                     
     return element_infos, scale_factor, appendStr 
 
+def slide_elements(conn, item_id, group_list=None):
+    """Retrieve a list of elements from the HTK annotation response.
+
+    Each element in this list corresponds to a polygon.
+
+    Optionally, ask for elements that belong to a specific group or list of groups."""
+    # Pull down the annotation objects
+    annotations_resp = conn.get('annotation/item/' + item_id)
+    img_metadata = conn.get('item/' + item_id + '/tiles')
+    #img_name = conn.get('item/' + item_id)['name']
+
+    if len(annotations_resp) == 0:
+        print('The annotation response had a length of Zero')
+        return [], []
+    
+    # Initialize the gt annotation holder
+    target_elements = []
+
+    # Cycle through each annotation on this item
+    for annotation in annotations_resp:
+        elements = annotation['annotation']['elements']
+        # Cycle through each of the annotation elements
+        for element in elements:
+            # Check that this item has a group (i.e. a class)
+            if 'group' in element.keys():
+                # If this group is what we're looking for, then pull it
+                if group_list is not None and element['group'] in group_list:
+                    target_elements.append(element)
+                elif group_list is None:
+                    target_elements.append(element)
+           
+    return target_elements, img_metadata
+
+
 def image_data(conn, sample_id, bounds_dict, appendStr=None):
     """Return a numpy image defined by the connection, sample_id, and ROI."""
 
