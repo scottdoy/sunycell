@@ -13,6 +13,9 @@ def get_polygon_from_pts(pts):
         X = pt[0]
         Y = pt[1]
         point_list = [(x,y) for x,y in zip(X,Y)]
+        if len(point_list) < 3:
+            # Simply continue on to the next set of X,Y coordinates
+            continue
         poly = Polygon(point_list)
         polygons.append(poly)
     return polygons
