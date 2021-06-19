@@ -100,7 +100,7 @@ def ids_names_from_htk(conn, collection_name, folder_name):
 
     return item_ids, item_names
 
-def slide_annotations(conn, slide_id, cfg, log=None, group_list=None):
+def slide_annotations(conn, slide_id, target_mpp, log=None, group_list=None):
     """Return a single slide's annotations.
     Accepts an optional annotation_list parameter indicating the groups to get.
     If not provided, grab everything. 
@@ -132,7 +132,7 @@ def slide_annotations(conn, slide_id, cfg, log=None, group_list=None):
         return None, None, None
     
     # Get the scale factor and string for this slide
-    scale_factor, appendStr = get_scale_factor_and_appendStr(conn, slide_id, MPP=float(cfg["data"]["target_mpp"]), MAG=None)
+    scale_factor, appendStr = get_scale_factor_and_appendStr(conn, slide_id, MPP=float(target_mpp), MAG=None)
 
     # Scale the annotations according to the desired MPP
     _ = scale_slide_annotations(annotations_resp, scale_factor)
