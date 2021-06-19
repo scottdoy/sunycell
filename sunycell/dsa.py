@@ -106,7 +106,8 @@ def slide_annotations(conn, slide_id, target_mpp, log=None, group_list=None):
     If not provided, grab everything. 
     """
     # Case-insensitive group list!
-    gl = [x.lower() for x in group_list]
+    if group_list is not None:
+        gl = [x.lower() for x in group_list]
 
     # Pull down the annotation objects
     try:
@@ -139,7 +140,8 @@ def slide_annotations(conn, slide_id, target_mpp, log=None, group_list=None):
 
     # Get the info of the elements based on the now-scaled annotations
     element_infos = get_bboxes_from_slide_annotations(annotations_resp)
-    element_infos = element_infos[element_infos['group'].isin(gl)]
+    if group_list is not None:
+        element_infos = element_infos[element_infos['group'].isin(gl)]
                     
     return element_infos, scale_factor, appendStr 
 
