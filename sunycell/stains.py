@@ -71,6 +71,9 @@ def reinhard_matching(source_image, target_image):
         # Compute the output channel
         reinhard_norm[:,:,channel_idx] = ((source_lab[:,:,channel_idx] - source_mean) * (target_std / source_std)) + target_mean
 
+    # Clip negative values to 0
+    reinhard_norm = np.clip(reinhard_norm, 0, None)
+    
     # Convert back to rgb space for display
     # RGB values are floats between 0.0 and 1.0, so scale them back up
     reinhard_rgb = (color.lab2rgb(reinhard_norm) * 255).astype(np.uint8)
