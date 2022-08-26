@@ -149,8 +149,8 @@ def slide_annotations(conn, slide_id, target_mpp, log=None, group_list=None):
                                                              MPP=float(target_mpp),
                                                              MAG=None)
 
-    # Scale the annotations according to the desired MPP
-    _ = scale_slide_annotations(annotations_resp, scale_factor)
+    ## Scale the annotations according to the desired MPP
+    #_ = scale_slide_annotations(annotations_resp, scale_factor)
 
     # Get the info of the elements based on the now-scaled annotations
     element_infos = get_bboxes_from_slide_annotations(annotations_resp)
@@ -160,7 +160,7 @@ def slide_annotations(conn, slide_id, target_mpp, log=None, group_list=None):
     return element_infos, scale_factor, appendStr
 
 
-def slide_elements(conn, item_id, group_list=None):
+def slide_elements(conn, item_id, target_mpp=None, group_list=None):
     """Retrieve a list of elements from the HTK annotation response.
 
     Each element in this list corresponds to a polygon.
