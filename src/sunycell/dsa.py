@@ -140,8 +140,12 @@ def slide_annotations(conn, slide_id, target_mpp, log=None, group_list=None):
 
     # Do they exist? If not, return false
     if len(annotations_resp) == 0:
-        log.warning(f'No annotations were found for {slide_id}.')
-        return None, None, None
+        if log is not None:
+            log.warning(f'No annotations were found for {slide_id}.')
+        else:
+            print(f'No annotations were found for {slide_id}.')
+
+    #    return None, None, None
 
     # Get the scale factor and string for this slide
     scale_factor, appendStr = get_scale_factor_and_appendStr(conn,
@@ -231,3 +235,6 @@ def image_data(conn, sample_id, bounds_dict, appendStr=None):
         return None
 
     return img_roi
+
+
+
