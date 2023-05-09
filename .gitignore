@@ -127,3 +127,9 @@ dmypy.json
 
 # Pyre type checker
 .pyre/
+
+# Remove backup folder
+data/backups
+
+# Remove log folder
+logs
