@@ -55,35 +55,57 @@ def get_collection_id(collection_name: str,
     return collection_id
 
 
-def get_folder_id(folder_name: str,
-                  conn: girder_client.GirderClient,
-                  collection_id: str) -> str:
-    """Given a folder name, connection, and collection ID number, return the folder ID number."""
+def get_folder_id(conn: girder_client.GirderClient,
+                  folder_path: str) -> str:
+    """Given a folder name and connection, return the folder ID number."""
     folder_id = None
 
-    # List all collections and find the target one
-    folder_list = conn.listFolder(collection_id, parentFolderType='collection')
-    # assert len(folder_list) > 0, f"Cannot find folder list for collection id {collection_id} on Histomics. Please check that the server connection is working, that you have access to the collection, and that you are spelling everything correctly."
-    for folder in folder_list:
-        if folder['name'] == folder_name:
-            folder_id = folder['_id']
-    assert folder_id, f"Connected to server and found some folders, but could not find folder named {folder_name}"
+    #folder_dsa_parts = folder_dsa_path.split('/')
+    folder_name = folder_path.split('/')[-1]
+    
+    # Get a list of all folders that match the target (terminal) folder name
+    folder_results = conn.get(f'/folder?parentType=folder&text={folder_name}&limit=1000&sort=lowerName&sortdir=1')
+    
+    # Cycle through the results and validate that the paths match with our list of folder parts
+    for folder_result in folder_results:
+        folder_result_id = folder_result['_id']
 
-    return folder_id
+        # Get the folder path for this folder
+        folder_root_objects = conn.get(f'/folder/{folder_result_id}/rootpath')
+
+        folder_root_path_parts = []
+
+        for folder_root_object in folder_root_objects:
+            if 'login' in folder_root_object['object'].keys():
+                folder_root_path_parts.append(folder_root_object['object']['login'])
+            elif 'name' in folder_root_object['object'].keys():
+                folder_root_path_parts.append(folder_root_object['object']['name'])
+            else:
+                print(f'WARNING: Cannot identify the type of {folder_root_object}')
+                return None
+            
+        # Append the folder name as well
+        folder_root_path_parts.append(folder_result['name'])
+
+        if '/'.join(folder_root_path_parts) == folder_path:
+            return folder_result_id
+    
+    print(f'WARNING: Did not find folder path {folder_path} on the server.')
+    return None
 
 
-def get_sample_id(conn, sample_name, collection_name, folder_name):
+def get_sample_id(conn, sample_name, folder_path):
     """Given a connection, collection & folder combo, and sample name, return the sample ID number.
 
     We assume that there are no nested folders -- it goes collection /
     folder_list / item_list
     """
-    id_list, item_list = ids_names_from_htk(conn, collection_name, folder_name)
+    id_list, item_list = ids_names_from_htk(conn, folder_path)
 
     for (id, item) in zip(id_list, item_list):
         if item == sample_name:
             return id
-    print(f'Did not find sample {sample_name} in {collection_name} / {folder_name}. Please recheck your access and spelling of the path.')
+    print(f'Did not find sample {sample_name} in {folder_path}. Please recheck your access and spelling of the path.')
     return None
 
 
@@ -93,11 +115,11 @@ def image_metadata(conn, sample_id):
     return resp
 
 
-def ids_names_from_htk(conn, collection_name, folder_name):
+def ids_names_from_htk(conn, folder_path):
     """Get all item IDs and names in a folder."""
     with conn.session() as session:
-        collection_id = get_collection_id(collection_name, conn)
-        folder_id = get_folder_id(folder_name, conn, collection_id)
+        # collection_id = get_collection_id(collection_name, conn)
+        folder_id = get_folder_id(conn, folder_path)
         item_list_htk = conn.listItem(folder_id)
 
         # Parse the retrieved item list
