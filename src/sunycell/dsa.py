@@ -63,12 +63,11 @@ def get_folder_id(conn: girder_client.GirderClient,
     """Given a folder name and connection, return the folder ID number."""
     folder_id = None
 
-    #folder_dsa_parts = folder_dsa_path.split('/')
     folder_name = folder_path.split('/')[-1]
-    
+
     # Get a list of all folders that match the target (terminal) folder name
     folder_results = conn.get(f'/folder?parentType=folder&text={folder_name}&limit={search_limit}&sort=lowerName&sortdir=1')
-    
+
     # Cycle through the results and validate that the paths match with our list of folder parts
     for folder_result in folder_results:
         folder_result_id = folder_result['_id']
