@@ -177,9 +177,6 @@ def slide_annotations(conn, slide_id, target_mpp, log=None, group_list=None):
                                                              MPP=float(target_mpp),
                                                              MAG=None)
 
-    ## Scale the annotations according to the desired MPP
-    #_ = scale_slide_annotations(annotations_resp, scale_factor)
-
     # Get the info of the elements based on the now-scaled annotations
     element_infos = get_bboxes_from_slide_annotations(annotations_resp)
     if group_list is not None:
