@@ -119,17 +119,17 @@ def image_metadata(conn, sample_id):
 
 def ids_names_from_htk(conn, folder_path):
     """Get all item IDs and names in a folder."""
-    with conn.session() as session:
-        # collection_id = get_collection_id(collection_name, conn)
-        folder_id = get_folder_id(conn, folder_path)
-        item_list_htk = conn.listItem(folder_id)
+    
+    folder_id = get_folder_id(conn, folder_path)
+    
+    item_list_htk = conn.listItem(folder_id)
 
-        # Parse the retrieved item list
-        item_ids = []
-        item_names = []
-        for item in item_list_htk:
-            item_ids.append(item['_id'])
-            item_names.append(item['name'])
+    # Parse the retrieved item list
+    item_ids = []
+    item_names = []
+    for item in item_list_htk:
+        item_ids.append(item['_id'])
+        item_names.append(item['name'])
 
     return item_ids, item_names
 
