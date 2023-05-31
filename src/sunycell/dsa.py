@@ -12,6 +12,141 @@ from histomicstk.annotations_and_masks.annotation_and_mask_utils import (
     get_bboxes_from_slide_annotations,
     scale_slide_annotations
 )
+import numpy as np
+from sunycell import dsa
+from requests.adapters import HTTPAdapter
+from requests.packages.urllib3.util import Retry
+import time
+from typing import Any, Dict, Tuple, Optional, Union, Sequence, List, Callable
+
+
+class DSAImage(dict):
+    def __init__(
+            self,
+            conn: girder_client.GirderClient,
+            collection_name: str = None,
+            folder_name: str = None,
+            image_name: str = None):
+        
+        self.conn = conn
+        self.collection_name = collection_name
+        self.folder_name = folder_name
+        self.image_name = image_name
+        self.folder_path = f'{collection_name}/{folder_name}'
+    
+    def __repr__(self):
+        properties = []
+        properties.extend([
+            f'collection_name: {self.collection_name}',
+            f'folder_name: {self.folder_name}',
+            f'image_name: {self.image_name}',
+            f'shape: {self.shape}',
+            f'spatial_resolution: {self.resolution}',
+            f'height: {self.height}',
+            f'width: {self.width}'
+        ])
+
+        properties = '; '.join(properties)
+        string = f'{self.__class__.__name__}({properties})'
+        return string
+    
+    @property
+    def collection_id(self) -> str:
+        """Collection ID containing this image on the DSA instance."""
+        return dsa.get_collection_id(conn=self.conn,
+                                     collection_name=self.collection_name)
+    
+    @property
+    def folder_id(self) -> str:
+        """Folder ID of the image location on the DSA."""
+        return dsa.get_folder_id(conn=self.conn,
+                                 folder_path=self.folder_path)
+    
+    @property
+    def sample_id(self) -> str:
+        """Sample ID on the DSA instance."""
+        return dsa.get_sample_id(conn=self.conn,
+                                 sample_name=self.image_name,
+                                 folder_path=self.folder_path)
+
+    @property
+    def metadata(self) -> dict:
+        """Metadata dictionary returned from DSA."""
+        return self._get_metadata()
+    
+    def _get_metadata(self) -> dict:
+        """Retrieve metadata from the server.
+        
+        Metadata includes the following:
+            levels: Number of magnification levels stored in the file
+            magnification: Optical magnification of the slide
+            mm_x: Spatial resolution in X, in millimeters per pixel
+            mm_y:  Spatial resolution in Y, in millimeters per pixel
+            sizeX: Width of the slide
+            sizeY: Height of the slide
+            tileHeight: Height of each tile in the TIFF
+            tileWidth: Width of each tile in the TIFF
+        """
+        return dsa.image_metadata(self.conn, self.sample_id)
+    
+    @property
+    def levels(self) -> int:
+        """Number of levels in this image."""
+        return self.metadata['levels']
+        
+    @property
+    def resolution(self) -> float:
+        """Spatial resolution in mpp (microns per pixel).
+        
+        Calculated as the average of the mm_x and mm_y properties.
+        """
+        return 1000 * (self.metadata['mm_x'] + self.metadata['mm_y']) / 2.0
+    
+    @property
+    def height(self) -> int:
+        """Image height, if 2D."""
+        return self.metadata['sizeY']
+    
+    @property
+    def width(self) -> int:
+        """Image width, if 2D."""
+        return self.metadata['sizeX']
+
+    @property
+    def shape(self) -> Tuple[int, int]:
+        """Tensor shape as :math:`(W, H)`."""
+        return tuple((self.width, self.height))
+    
+    
+    def roi(self, bounds: dict, mpp: float = None) -> np.array:
+        """Use HTK to pull an ROI from this image as a numpy array."""
+        if mpp is None:
+            return dsa.image_data(self.conn, self.sample_id, bounds_dict=bounds)
+        else:
+            scale_factor, appendStr = get_scale_factor_and_appendStr(self.conn,
+                                                             self.sample_id,
+                                                             MPP=float(mpp),
+                                                             MAG=None)
+            return dsa.image_data(self.conn, self.sample_id, bounds_dict=bounds, appendStr=appendStr)
+    
+    def annotations(self) -> list:
+        """Obtain the annotations for the image, filtered by target_groups."""
+        
+        annotation_response = self.conn.get(f'annotation/item/{self.sample_id}')
+        
+        annotation_elements = dict()
+        
+        for annotation_object in annotation_response:
+            annotation = annotation_object['annotation']
+            elements_list = annotation['elements']
+            
+            for e in elements_list:
+                if e['group'] in annotation_elements.keys():
+                    annotation_elements[e['group']].append(e)
+                else:
+                    annotation_elements[e['group']] = [e]
+        
+        return annotation_elements
 
 
 def dsa_connection(api_url: str, api_key: str) -> girder_client.GirderClient:
