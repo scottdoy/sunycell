@@ -12,6 +12,7 @@ from histomicstk.annotations_and_masks.annotation_and_mask_utils import (
     get_bboxes_from_slide_annotations,
     scale_slide_annotations
 )
+from histomicstk.saliency.tissue_detection import get_slide_thumbnail
 import numpy as np
 from sunycell import dsa
 from requests.adapters import HTTPAdapter
@@ -117,6 +118,10 @@ class DSAImage(dict):
         """Tensor shape as :math:`(W, H)`."""
         return tuple((self.width, self.height))
     
+
+    def thumbnail(self) -> np.ndarray:
+        return get_slide_thumbnail(self.conn, self._sample_id)
+
     
     def roi(self, bounds: dict, mpp: float = None) -> np.array:
         """Use HTK to pull an ROI from this image as a numpy array."""
