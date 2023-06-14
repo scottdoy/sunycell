@@ -183,11 +183,11 @@ def get_collection_id(collection_name: str,
     # List all collections and find the target one
     collection_list = list(conn.listCollection())
 
-    assert len(collection_list) > 0,
-        f"Cannot find collection named {collection_name} on Histomics. "
-        "Please check that the server connection is working, that you have "
-        "access to the collection, and that you are spelling everything "
-        "correctly."
+    assert len(collection_list) > 0, \
+        f"Cannot find collection named {collection_name} on Histomics. " \
+        + "Please check that the server connection is working, that you have " \
+        + "access to the collection, and that you are spelling everything " \
+        + "correctly."
 
     for collection in collection_list:
         if collection['name'] == collection_name:
