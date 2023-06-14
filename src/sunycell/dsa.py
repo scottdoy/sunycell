@@ -45,6 +45,25 @@ class DSAImage(dict):
         self.image_name = image_name
         self.folder_path = f'{collection_name}/{folder_name}'
 
+        # Initialize all properties with a single connection
+        with self.conn.session() as session:
+            self._collection_id = dsa.get_collection_id(
+                conn=self.conn,
+                collection_name=self.collection_name)
+            
+            self._folder_id = dsa.get_folder_id(
+                conn=self.conn,
+                folder_path=self.folder_path)
+            
+            self._sample_id = dsa.get_sample_id(
+                conn=self.conn,
+                sample_name=self.image_name,
+                folder_path=self.folder_path)
+
+            self._metadata = dsa.image_metadata(
+                self.conn,
+                self._sample_id)
+            
     def __repr__(self):
         properties = []
         properties.extend([
@@ -64,42 +83,23 @@ class DSAImage(dict):
     @property
     def collection_id(self) -> str:
         """Collection ID containing this image on the DSA instance."""
-        return dsa.get_collection_id(conn=self.conn,
-                                     collection_name=self.collection_name)
+        return self._collection_id
     
     @property
     def folder_id(self) -> str:
         """Folder ID of the image location on the DSA."""
-        return dsa.get_folder_id(conn=self.conn,
-                                 folder_path=self.folder_path)
+        return self._folder_id
     
     @property
     def sample_id(self) -> str:
         """Sample ID on the DSA instance."""
-        return dsa.get_sample_id(conn=self.conn,
-                                 sample_name=self.image_name,
-                                 folder_path=self.folder_path)
+        return self._sample_id
 
     @property
     def metadata(self) -> dict:
         """Metadata dictionary returned from DSA."""
-        return self._get_metadata()
-    
-    def _get_metadata(self) -> dict:
-        """Retrieve metadata from the server.
-        
-        Metadata includes the following:
-            levels: Number of magnification levels stored in the file
-            magnification: Optical magnification of the slide
-            mm_x: Spatial resolution in X, in millimeters per pixel
-            mm_y:  Spatial resolution in Y, in millimeters per pixel
-            sizeX: Width of the slide
-            sizeY: Height of the slide
-            tileHeight: Height of each tile in the TIFF
-            tileWidth: Width of each tile in the TIFF
-        """
-        return dsa.image_metadata(self.conn, self.sample_id)
-    
+        return self._metadata
+       
     @property
     def levels(self) -> int:
         """Number of levels in this image."""
