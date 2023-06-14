@@ -8,7 +8,8 @@ setup(
     install_requires=[
         'histomicstk',
         'python-dotenv',
-        'pooch'
+        'pooch',
+        'rasterio'
     ],
 )
 

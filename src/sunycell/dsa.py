@@ -12,7 +12,347 @@ from histomicstk.annotations_and_masks.annotation_and_mask_utils import (
     get_bboxes_from_slide_annotations,
     scale_slide_annotations
 )
+from histomicstk.saliency.tissue_detection import get_slide_thumbnail
+import numpy as np
+import rasterio
+import rasterio.features
+from scipy import ndimage as ndi
+import shapely
+from shapely.affinity import affine_transform
+from shapely.geometry import Polygon, MultiPolygon, Point, MultiPoint
+from shapely.ops import unary_union
+from skimage.color import rgb2hed
+from skimage.measure import label
+from skimage.morphology import disk, opening, remove_small_objects, binary_erosion, binary_dilation
+from sunycell import dsa
+from requests.adapters import HTTPAdapter
+from requests.packages.urllib3.util import Retry
+import time
+from typing import Any, Dict, Tuple, Optional, Union, Sequence, List, Callable
 
+
+class DSAImage(dict):
+    def __init__(
+            self,
+            conn: girder_client.GirderClient,
+            collection_name: str = None,
+            folder_name: str = None,
+            image_name: str = None):
+        
+        self.conn = conn
+        self.collection_name = collection_name
+        self.folder_name = folder_name
+        self.image_name = image_name
+        self.folder_path = f'{collection_name}/{folder_name}'
+
+        # Initialize all properties with a single connection
+        with self.conn.session() as session:
+            self._collection_id = dsa.get_collection_id(
+                conn=self.conn,
+                collection_name=self.collection_name)
+            
+            self._folder_id = dsa.get_folder_id(
+                conn=self.conn,
+                folder_path=self.folder_path)
+            
+            self._sample_id = dsa.get_sample_id(
+                conn=self.conn,
+                sample_name=self.image_name,
+                folder_path=self.folder_path)
+
+            self._metadata = dsa.image_metadata(
+                self.conn,
+                self._sample_id)
+            
+    def __repr__(self):
+        properties = []
+        properties.extend([
+            f'collection_name: {self.collection_name}',
+            f'folder_name: {self.folder_name}',
+            f'image_name: {self.image_name}',
+            f'shape: {self.shape}',
+            f'spatial_resolution: {self.resolution}',
+            f'height: {self.height}',
+            f'width: {self.width}'
+        ])
+
+        properties = '; '.join(properties)
+        string = f'{self.__class__.__name__}({properties})'
+        return string
+    
+    @property
+    def collection_id(self) -> str:
+        """Collection ID containing this image on the DSA instance."""
+        return self._collection_id
+    
+    @property
+    def folder_id(self) -> str:
+        """Folder ID of the image location on the DSA."""
+        return self._folder_id
+    
+    @property
+    def sample_id(self) -> str:
+        """Sample ID on the DSA instance."""
+        return self._sample_id
+
+    @property
+    def metadata(self) -> dict:
+        """Metadata dictionary returned from DSA."""
+        return self._metadata
+       
+    @property
+    def levels(self) -> int:
+        """Number of levels in this image."""
+        return self.metadata['levels']
+        
+    @property
+    def resolution(self) -> float:
+        """Spatial resolution in mpp (microns per pixel).
+        
+        Calculated as the average of the mm_x and mm_y properties.
+        """
+        return 1000 * (self.metadata['mm_x'] + self.metadata['mm_y']) / 2.0
+    
+    @property
+    def height(self) -> int:
+        """Image height, if 2D."""
+        return self.metadata['sizeY']
+    
+    @property
+    def width(self) -> int:
+        """Image width, if 2D."""
+        return self.metadata['sizeX']
+
+    @property
+    def shape(self) -> Tuple[int, int]:
+        """Tensor shape as :math:`(W, H)`."""
+        return tuple((self.width, self.height))
+    
+
+    def thumbnail(self) -> np.ndarray:
+        return get_slide_thumbnail(self.conn, self._sample_id)
+
+    
+    def roi(self, bounds: dict, mpp: float = None) -> np.array:
+        """Use HTK to pull an ROI from this image as a numpy array."""
+        if mpp is None:
+            return dsa.image_data(self.conn, self.sample_id, bounds_dict=bounds)
+        else:
+            scale_factor, appendStr = get_scale_factor_and_appendStr(self.conn,
+                                                             self.sample_id,
+                                                             MPP=float(mpp),
+                                                             MAG=None)
+            return dsa.image_data(self.conn, self.sample_id, bounds_dict=bounds, appendStr=appendStr)
+    
+    def annotations(self) -> list:
+        """Obtain the annotations for the image, filtered by target_groups."""
+        
+        annotation_response = self.conn.get(f'annotation/item/{self.sample_id}')
+        
+        annotation_elements = dict()
+        
+        for annotation_object in annotation_response:
+            annotation = annotation_object['annotation']
+            elements_list = annotation['elements']
+            
+            for e in elements_list:
+                if e['group'] in annotation_elements.keys():
+                    annotation_elements[e['group']].append(e)
+                else:
+                    annotation_elements[e['group']] = [e]
+        
+        return annotation_elements
+
+
+    def tile_wsi(self, tile_size: int = 1024, target_mpp: float = None) -> list:
+        """Retrieve a list of rectangles defining non-overlapping tiles.
+
+        tile_size: Int of the desired RESULTING tile size
+        target_mpp: Spatial resolution of the returned tiles
+        """
+
+        # Calculate the difference between target and base
+        if target_mpp is None:
+            target_mpp = self.resolution
+
+        mpp_ratio = target_mpp / self.resolution
+        mod_tile_size = int(np.ceil(tile_size * mpp_ratio))
+
+        # For the whole slide, using the image metadata to define boundaries
+        left_coords = np.arange(0, self.width, mod_tile_size)
+        top_coords = np.arange(0, self.height, mod_tile_size)
+
+        tile_polygons = []
+
+        for row in top_coords:
+            for col in left_coords:
+                tile_polygons.append(
+                    Polygon([
+                        (col, row),
+                        (col, row+mod_tile_size),
+                        (col+mod_tile_size, row+mod_tile_size),
+                        (col+mod_tile_size, row)
+                    ])
+                )
+        
+        return tile_polygons
+
+
+    def tile_polygon(self, polygon, tile_size: int = 1024, target_mpp: float = None, edges: str = "within") -> list:
+        """Retrieve a list of rectangles defining non-overlapping tiles.
+
+        tile_size: Int of the desired RESULTING tile size
+        target_mpp: Spatial resolution of the returned tiles
+        """
+
+        # Calculate the difference between target and base
+        if target_mpp is None:
+            target_mpp = self.resolution
+
+        mpp_ratio = target_mpp / self.resolution
+        mod_tile_size = int(np.ceil(tile_size * mpp_ratio))
+
+        # Get the bounding box of the polygon
+        (minx, miny, maxx, maxy) = polygon.bounds
+
+        # For the whole slide, using the image metadata to define boundaries
+        left_coords = np.arange(minx, maxx, mod_tile_size)
+        top_coords = np.arange(miny, maxy, mod_tile_size)
+
+        tile_polygons = []
+
+        # for tile_idx, (col, row) in enumerate(zip(left_coords, top_coords)):
+        for col in left_coords:
+            for row in top_coords:
+                tile_polygon = Polygon([
+                    (col, row),
+                    (col, row+mod_tile_size),
+                    (col+mod_tile_size, row+mod_tile_size),
+                    (col+mod_tile_size, row)])
+                # If the edges type is "within", ensure this one is valid
+                if edges == "within":
+                    # The tiles must be STRICTLY within the polygon (within and not overlap)
+                    if tile_polygon.within(unary_union(polygon)) and not tile_polygon.overlaps(unary_union(polygon)):
+                        tile_polygons.append(tile_polygon)
+                    # else:
+                    #     print(f'Tile at {tile_polygon.bounds()} is not strictly within the polygon')
+                elif edges == "overlaps":
+                    # Tile can either overlap or be within the shape
+                    if tile_polygon.overlaps(unary_union(polygon)) or tile_polygon.within(unary_union(polygon)):
+                        tile_polygons.append(tile_polygon)
+                    # else:
+                    #     print(f'Tile at {tile_polygon.bounds()} is not within or overlapping with the polygon')
+
+        return tile_polygons
+
+
+    def detect_tissue(self, ds: int = 5, min_size: int = 1000, threshold: float = 0.001) -> MultiPolygon:
+        """Return a MultiPolygon corresponding to the tissue area."""
+
+        # Get the thumbnail image
+        img_thumb = self.thumbnail()
+
+        # Need the thumbnail height and width
+        thumb_height, thumb_width = np.shape(img_thumb)[:2]
+
+        # Figure out the scale factor between the two
+        thumb_scale = ((self.width / thumb_width) + (self.height / thumb_height)) / 2
+
+        # Label the background
+        img_labeled = self._background_segmentation_deconv(
+            img_thumb,
+            disk_size=ds,
+            min_size=min_size,
+            threshold=threshold)
+        
+        # For each tissue area, grab a polygon
+        thumb_polygons = []
+
+        for num_tissue in np.unique(img_labeled[img_labeled != 0]):
+            # print(f'Processing tissue {num_tissue}')
+            # This will iterate through each tissue on WSI to get area
+            tissue_area = img_labeled == num_tissue
+
+            # Re-dilate tissue area to its original size
+            tissue_area = binary_dilation(tissue_area, footprint = disk(5))
+            
+            tissue_polygon = self._mask_to_polygons_layer(tissue_area)
+            thumb_polygons.append(tissue_polygon)
+
+        # Post-process tissue polygons to get one multipolygon
+        # AND convert to the original slide space
+        tissue_geoms = []
+        for thumb_polygon in thumb_polygons:
+            for thumb_geom in thumb_polygon.geoms:
+                x, y = thumb_geom.exterior.xy
+                tissue_geoms.append(Polygon(zip(np.array(x) * thumb_scale, np.array(y) * thumb_scale)))
+                
+        tissue_polygons = MultiPolygon(tissue_geoms)
+
+        return tissue_polygons
+
+
+    def _background_segmentation_deconv(self, img, disk_size, min_size, threshold):
+        img_hed = rgb2hed(img)
+        
+        # Use hemotoxylin to separate
+        binary_img = img_hed[:,:,1] > threshold
+        
+        # Clean up the image
+        mask_proc = opening(binary_img, disk(1))
+        mask_proc = ndi.binary_fill_holes(mask_proc > 0)
+        mask_proc = remove_small_objects(mask_proc, min_size = min_size)
+
+        # Perform morphological erosion
+        mask_proc = binary_erosion(mask_proc, footprint = disk(disk_size))
+        
+        # Label the resulting mask
+        labeled_proc = label(mask_proc, background = 0)
+        
+        return labeled_proc
+
+
+    def _mask_to_polygons_layer(self, mask, offset_matrix=[1, 0, 0, 1, 0, 0,]):
+        """Given a mask and an offset matrix, compute a MultiPolygon consisting of the objects in the mask.
+        
+        Original method from here:
+            https://rocreguant.com/convert-a-mask-into-a-polygon-for-images-using-shapely-and-rasterio/1786/
+        
+        Offset matrix is used to adjust the coordinates of the polygons after creation:
+            https://shapely.readthedocs.io/en/stable/manual.html#shapely.affinity.affine_transform
+        """
+        all_polygons = []
+        
+        # rasterio.features.shapes() will generate shapes and values from the array in the first argument.
+        # Since we aren't using the values here, the first argument can be anything (we use the mask), but
+        # the second needs to be the boolean mask that defines the geometry.
+        # The "transform=rasterio.Affine()" defines the transformation that is applied to the geometry;
+        # Here, we use [1.0, 0, 0, 0, 1.0, 0] but this is the default value (we can leave this blank).
+        for shape, value in rasterio.features.shapes(mask.astype(np.int16), 
+                                            mask=(mask>0),
+                                            transform=rasterio.Affine(1.0, 0, 0, 0, 1.0, 0)):
+            
+            # Using "shapely.geometry.shape()" here allows shapely to decide what kind of object to create;
+            # however, rasterio.features.shapes() will create a polygon, so we could just use Polygon here.
+            all_polygons.append(shapely.geometry.shape(shape))
+
+        # Construct an initial MultiPolygon from this list
+        all_polygons = MultiPolygon(all_polygons)
+        
+        # Check to see if this is a "valid" MultiPolygon
+        if not all_polygons.is_valid:
+            # If not, apply the 0 buffer trick
+            all_polygons = all_polygons.buffer(0)
+            
+            # Sometimes buffer() converts a simple Multipolygon to just a Polygon,
+            # need to keep it a Multi throughout
+            if all_polygons.type == 'Polygon':
+                all_polygons = MultiPolygon([all_polygons])
+        
+        # Apply the affine transform to adjust the coordinates of the polygon accordingly
+        all_polygons = affine_transform(all_polygons, offset_matrix)
+        
+        return all_polygons
 
 def dsa_connection(api_url: str, api_key: str) -> girder_client.GirderClient:
     """Connect to a DSA server.
@@ -43,11 +383,11 @@ def get_collection_id(collection_name: str,
     # List all collections and find the target one
     collection_list = list(conn.listCollection())
 
-    assert len(collection_list) > 0,
-        f"Cannot find collection named {collection_name} on Histomics. "
-        "Please check that the server connection is working, that you have "
-        "access to the collection, and that you are spelling everything "
-        "correctly."
+    assert len(collection_list) > 0, \
+        f"Cannot find collection named {collection_name} on Histomics. " \
+        + "Please check that the server connection is working, that you have " \
+        + "access to the collection, and that you are spelling everything " \
+        + "correctly."
 
     for collection in collection_list:
         if collection['name'] == collection_name:
