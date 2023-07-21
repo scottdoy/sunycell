@@ -375,8 +375,8 @@ def dsa_connection(api_url: str, api_key: str) -> girder_client.GirderClient:
     return gc
 
 
-def get_collection_id(collection_name: str,
-                      conn: girder_client.GirderClient) -> str:
+def get_collection_id(conn: girder_client.GirderClient,
+                      collection_name: str) -> str:
     """Given a connection, grab the id of the target collection."""
     collection_id = None
 
