@@ -598,4 +598,102 @@ def image_data(conn, sample_id, bounds_dict, appendStr=None):
     return img_roi
 
 
+def slide_roi(conn: girder_client.GirderClient,
+              sample_id: str,
+              bounds: dict,
+              target_mpp: Union[float, None] = None) -> np.array:
+    """Use HTK to pull an ROI from this image as a numpy array."""
+    if target_mpp is None:
+        return dsa.image_data(conn, sample_id, bounds_dict=bounds)
+    else:
+        _, appendStr = get_scale_factor_and_appendStr(conn,
+                                                      sample_id,
+                                                      MPP=target_mpp,
+                                                      MAG=None)
+        return dsa.image_data(conn, sample_id, bounds_dict=bounds, appendStr=appendStr)
+
+
+def tile_polygon(slide_resolution: float,
+                 polygon: Union[Polygon, MultiPolygon],
+                 tile_size: int = 1024,
+                 target_mpp: Union[float, None] = None,
+                 edges: str = "within") -> list:
+    """Retrieve a list of rectangles defining non-overlapping tiles.
+
+    tile_size: Int of the desired RESULTING tile size
+    target_mpp: Spatial resolution of the returned tiles
+    edges: String, either "within", "overlaps", or "both"
+    """
+
+    assert edges in ['within', 'overlaps', 'both'], f'{edges} is not a valid overlap designation, use "within", "overlaps", or "both".'
+
+    # Get the base resolution of the image
+
+    # Calculate the difference between target and base
+    if target_mpp is None:
+        target_mpp = slide_resolution
+
+    mpp_ratio = target_mpp / slide_resolution
+    mod_tile_size = int(np.ceil(tile_size * mpp_ratio))
+
+    # Get the bounding box of the polygon
+    (minx, miny, maxx, maxy) = polygon.bounds
+
+    # For the whole slide, using the image metadata to define boundaries
+    left_coords = np.arange(minx, maxx, mod_tile_size)
+    top_coords = np.arange(miny, maxy, mod_tile_size)
+
+    tile_polygons = []
+
+    # for tile_idx, (col, row) in enumerate(zip(left_coords, top_coords)):
+    for col in left_coords:
+        for row in top_coords:
+            tile_polygon = Polygon([
+                (col, row),
+                (col, row+mod_tile_size),
+                (col+mod_tile_size, row+mod_tile_size),
+                (col+mod_tile_size, row)])
+            # If the edges type is "within", ensure this one is valid
+            if edges == "within":
+                # The tiles must be STRICTLY within the polygon (within and not overlap)
+                if tile_polygon.within(unary_union(polygon)) and not tile_polygon.overlaps(unary_union(polygon)):
+                    tile_polygons.append(tile_polygon)
+                # else:
+                #     print(f'Tile at {tile_polygon.bounds()} is not strictly within the polygon')
+            elif edges == "overlaps":
+                # Tile must either overlap and not be within the shape
+                if tile_polygon.overlaps(unary_union(polygon)) and not tile_polygon.within(unary_union(polygon)):
+                    tile_polygons.append(tile_polygon)
+            elif edges == "both":
+                # Tile can either overlap or be within the shape
+                if tile_polygon.overlaps(unary_union(polygon)) or tile_polygon.within(unary_union(polygon)):
+                    tile_polygons.append(tile_polygon)
+                # else:
+                #     print(f'Tile at {tile_polygon.bounds()} is not within or overlapping with the polygon')
+
+    return tile_polygons
+
+
+def annotations(conn: girder_client.GirderClient, sample_id: str) -> dict:
+    """Obtain the annotations for the image, filtered by target_groups."""
+    
+    annotation_response = conn.get(f'annotation/item/{sample_id}')
+    
+    annotation_elements = dict()
+    
+    for annotation_object in annotation_response:
+        annotation = annotation_object['annotation']
+        elements_list = annotation['elements']
+        
+        for e in elements_list:
+            # Ensure that the object has a class assigned to it; if not, assign "default"
+            if 'group' not in e.keys():
+                e['group'] = 'default'
+
+            if e['group'] in annotation_elements.keys():
+                annotation_elements[e['group']].append(e)
+            else:
+                annotation_elements[e['group']] = [e]
+    
+    return annotation_elements
 
