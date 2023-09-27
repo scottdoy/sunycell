@@ -26,7 +26,8 @@ def get_polygons_from_elements(target_elements: list) -> MultiPolygon:
                 bot = top + target_element['height']
                 pts = [[left, top], [right, top], [right, bot], [left, bot], [left, top]]
             else:
-                print(f'Skipping element with type: {target_element["type"]}')
+                #print(f'Skipping element with type: {target_element["type"]}')
+                continue
         else:
             # We have a polygon, so extract the points directly
             pts = target_element['points']
