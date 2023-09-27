@@ -35,9 +35,9 @@ class DSAImage(dict):
     def __init__(
             self,
             conn: girder_client.GirderClient,
-            collection_name: str = None,
-            folder_name: str = None,
-            image_name: str = None):
+            collection_name: str,
+            folder_name: str,
+            image_name: str):
         
         self.conn = conn
         self.collection_name = collection_name
@@ -144,7 +144,7 @@ class DSAImage(dict):
                                                              MAG=None)
             return dsa.image_data(self.conn, self.sample_id, bounds_dict=bounds, appendStr=appendStr)
     
-    def annotations(self) -> list:
+    def annotations(self) -> dict:
         """Obtain the annotations for the image, filtered by target_groups."""
         
         annotation_response = self.conn.get(f'annotation/item/{self.sample_id}')
@@ -156,6 +156,10 @@ class DSAImage(dict):
             elements_list = annotation['elements']
             
             for e in elements_list:
+                # Ensure that the object has a class assigned to it; if not, assign "default"
+                if 'group' not in e.keys():
+                    e['group'] = 'default'
+
                 if e['group'] in annotation_elements.keys():
                     annotation_elements[e['group']].append(e)
                 else:
@@ -164,7 +168,7 @@ class DSAImage(dict):
         return annotation_elements
 
 
-    def tile_wsi(self, tile_size: int = 1024, target_mpp: float = None) -> list:
+    def tile_wsi(self, tile_size: int = 1024, target_mpp: Union[float, None] = None) -> list:
         """Retrieve a list of rectangles defining non-overlapping tiles.
 
         tile_size: Int of the desired RESULTING tile size
@@ -198,7 +202,7 @@ class DSAImage(dict):
         return tile_polygons
 
 
-    def tile_polygon(self, polygon, tile_size: int = 1024, target_mpp: float = None, edges: str = "within") -> list:
+    def tile_polygon(self, polygon: Union[Polygon, MultiPolygon], tile_size: int = 1024, target_mpp: Union[float, None] = None, edges: str = "within") -> list:
         """Retrieve a list of rectangles defining non-overlapping tiles.
 
         tile_size: Int of the desired RESULTING tile size
