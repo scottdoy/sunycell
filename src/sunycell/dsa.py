@@ -10,7 +10,6 @@ from histomicstk.annotations_and_masks.annotation_and_mask_utils import (
     get_scale_factor_and_appendStr,
     get_image_from_htk_response,
     get_bboxes_from_slide_annotations,
-    scale_slide_annotations
 )
 from histomicstk.saliency.tissue_detection import get_slide_thumbnail
 import numpy as np
@@ -19,16 +18,13 @@ import rasterio.features
 from scipy import ndimage as ndi
 import shapely
 from shapely.affinity import affine_transform
-from shapely.geometry import Polygon, MultiPolygon, Point, MultiPoint
+from shapely.geometry import Polygon, MultiPolygon
 from shapely.ops import unary_union
 from skimage.color import rgb2hed
 from skimage.measure import label
 from skimage.morphology import disk, opening, remove_small_objects, binary_erosion, binary_dilation
 from sunycell import dsa
-from requests.adapters import HTTPAdapter
-from requests.packages.urllib3.util import Retry
-import time
-from typing import Any, Dict, Tuple, Optional, Union, Sequence, List, Callable
+from typing import Tuple, Union
 
 
 class DSAImage(dict):
@@ -403,7 +399,7 @@ def get_collection_id(conn: girder_client.GirderClient,
 
 def get_folder_id(conn: girder_client.GirderClient,
                   folder_path: str,
-                  search_limit: int = 100) -> str:
+                  search_limit: int = 1000) -> str:
     """Given a folder name and connection, return the folder ID number."""
     folder_id = None
 
