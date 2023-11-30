@@ -12,7 +12,30 @@ from scipy import ndimage as ndi
 from histomicstk.saliency.tissue_detection import (
     get_tissue_mask)
 
-def histogram_matching(source_image, target_image, nbins = 255):
+def histogram_parameters(source_image: np.ndarray, nbins: int = 255):
+    """Calculate the histogram parameters from a single source image.
+
+    This set of values will be used by histogram matching to produce a consistent transform.
+    """
+    cdf_source_channel = []
+    src_bins_channel = []
+
+    # Cycle through each channel
+    for channel_idx in range(source_image.shape[2]):
+        src_hist, src_bins = np.histogram(source_image[:,:,channel_idx].flatten(), nbins, density=True)
+
+        # Source image normalization
+        # Calculate the cumulative distribution function, then normalize
+        cdf_source = src_hist.cumsum()
+        cdf_source = (255 * cdf_source / cdf_source[-1]).astype(np.uint8)
+        cdf_source_channel.append(cdf_source)
+        src_bins_channel.append(src_bins)
+
+    return (cdf_source_channel, src_bins_channel)
+
+def histogram_matching(source_image: np.ndarray, 
+                       target_image: np.ndarray, 
+                       nbins: int = 255):
     """Perform stain normalization through RGB histogram matching.
     """
     # Ensure that the source and target images are numpy arrays
@@ -22,16 +45,13 @@ def histogram_matching(source_image, target_image, nbins = 255):
     # Make a copy of the source to contain the matched image
     source_matched = source_image_np.copy()
 
+    # Compute the parameters for the image
+    (cdf_source_channel, src_bins_channel) = histogram_parameters(source_image_np)
+
     # Normalize along each color channel separately
     for channel_idx in range(source_image_np.shape[2]):
-        
-        src_hist, src_bins = np.histogram(source_image_np[:,:,channel_idx].flatten(), nbins, density=True)
-        tar_hist, tar_bins = np.histogram(target_image_np[:,:,channel_idx].flatten(), nbins, density=True)
 
-        # Source image normalization
-        # Calculate the cumulative distribution function, then normalize
-        cdf_source = src_hist.cumsum()
-        cdf_source = (255 * cdf_source / cdf_source[-1]).astype(np.uint8)
+        tar_hist, tar_bins = np.histogram(target_image_np[:,:,channel_idx].flatten(), nbins, density=True)
 
         # Target image normalization
         # Calculate the cumulative distribution function, then normalize
@@ -39,7 +59,7 @@ def histogram_matching(source_image, target_image, nbins = 255):
         cdf_target = (255 * cdf_target / cdf_target[-1]).astype(np.uint8)
 
         # Interpolate 
-        interp1 = np.interp(source_image_np[:,:,channel_idx].flatten(), src_bins[:-1], cdf_source)
+        interp1 = np.interp(source_image_np[:,:,channel_idx].flatten(), src_bins_channel[channel_idx][:-1], cdf_source_channel[channel_idx])
         interp2 = np.interp(interp1, cdf_target, tar_bins[:-1])
 
         source_matched[:,:,channel_idx] = interp2.reshape((source_image_np.shape[0],source_image_np.shape[1]))
