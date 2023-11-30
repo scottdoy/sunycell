@@ -12,11 +12,9 @@ import argparse
 from datetime import datetime
 from dotenv import load_dotenv
 from histomicstk.annotations_and_masks.annotation_database_parser import (
-    dump_annotations_locally, parse_annotations_to_local_tables)
+    dump_annotations_locally)
 import os
-import pandas as pd
 from pathlib import Path
-import sqlalchemy as db
 from sunycell import dsa
 
 
@@ -58,12 +56,12 @@ if __name__=="__main__":
 
     # Connect to SUNYCell
     load_dotenv(config['env_path'])
-    gc = dsa.dsa_connection(api_key=os.getenv("APIKEY"), api_url=os.getenv("APIURL"))
+    gc = dsa.dsa_connection(api_key=str(os.getenv("APIKEY")), api_url=str(os.getenv("APIURL")))
 
     # This is where the annotations and sqlite database will be dumped locally
     for collection_name in config['collections']:
         print(f'Processing {collection_name}...')
-        collection_id = dsa.get_collection_id(collection_name, gc)
+        collection_id = dsa.get_collection_id(conn=gc, collection_name=collection_name)
         
         # Set up the path to this collection
         config['save_dir'] = Path(f'./{config["backup_dir"]}/{time_prefix}/{collection_name}')
