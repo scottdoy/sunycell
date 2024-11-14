@@ -19,6 +19,24 @@ The main dependency of the software is [histomicstk](https://github.com/DigitalS
 There are some other utilities required as well, like `python-dotenv` for loading your secrets / API keys. 
 See the `src/setup.py` for details.
 
+### CCR Installation
+
+Running the SUNYCell package on the Center for Computational Research system requires the use of the easybuild system for setting up modules.
+Please follow instructions [here](https://docs.ccr.buffalo.edu/en/latest/software/building/) for more details.
+In short:
+- Create a new tagged release on GitHub
+- Copy and edit the sunycell easybuild recipie
+    - Update the version numbers and hashes for the new release
+- Run the following:
+
+```
+module load easybuild
+export CCR_BUILD_PREFIX=/projects/academic/scottdoy/easybuild
+eb sunycell-<semver>-foss-2021b.eb
+```
+
+You may need to do some troubleshooting if the system changes in the future.
+
 ## Running Examples
 
 In order to access files on the SUNYCell DSA, you'll need to create a `.env` file somewhere in your project directory. 
